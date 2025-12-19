@@ -1,3 +1,7 @@
+# =========================================
+# Final ML Training Script - Corrected
+# =========================================
+
 import pandas as pd
 from spark_session import spark
 import joblib
@@ -7,85 +11,100 @@ from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
+from sklearn.feature_extraction.text import TfidfVectorizer
 from textblob import TextBlob
 
 # -------------------------------
-# Load final dataset
+# 1. Load dataset (FULL DATA)
 # -------------------------------
 df_spark = spark.read.parquet("hdfs://localhost:9000/processed/final_dataset")
-df = df_spark.limit(1000).toPandas()  # sample for faster training
+df = df_spark.toPandas()
 
 # -------------------------------
-# Ensure 'clean_text' exists
+# 2. Handle missing clean_text
 # -------------------------------
-if 'clean_text' not in df.columns:
-    raise ValueError("Column 'clean_text' not found in dataset")
+df['clean_text'] = df['clean_text'].fillna("")  # replace None/NaN with empty string
+print("Missing 'clean_text' after fillna:", df['clean_text'].isna().sum())
 
 # -------------------------------
-# Compute sentiment if missing
+# 3. Generate sentiment labels
 # -------------------------------
-if 'sentiment' not in df.columns or df['sentiment'].isnull().all():
-    def get_sentiment(text):
-        polarity = TextBlob(str(text)).sentiment.polarity
-        if polarity > 0:
-            return 1
-        elif polarity < 0:
-            return -1
-        else:
-            return 0
+def get_sentiment(text):
+    polarity = TextBlob(str(text)).sentiment.polarity
+    if polarity > 0.1:
+        return 1       # Positive
+    elif polarity < -0.1:
+        return -1      # Negative
+    else:
+        return 0       # Neutral
 
-    df['sentiment'] = df['clean_text'].apply(get_sentiment)
-
-# Class distribution
-print("Sentiment distribution:\n", df['sentiment'].value_counts())
+df['sentiment'] = df['clean_text'].apply(get_sentiment)
+print("Original distribution:\n", df['sentiment'].value_counts())
 
 # -------------------------------
-# Load TF-IDF vectorizer
+# 4. Balance dataset
 # -------------------------------
-vectorizer = joblib.load("submit_dashboard/models/tfidf_vectorizer.pkl")
-X = vectorizer.transform(df["clean_text"])
-y = df["sentiment"]
+df_neg = df[df.sentiment == -1]
+df_neu = df[df.sentiment == 0].sample(len(df_neg), random_state=42)
+df_pos = df[df.sentiment == 1]
+
+df_balanced = pd.concat([df_neg, df_neu, df_pos]).sample(frac=1, random_state=42)
+print("Balanced distribution:\n", df_balanced['sentiment'].value_counts())
 
 # -------------------------------
-# Train/Test split
+# 5. Train TF-IDF Vectorizer
+# -------------------------------
+vectorizer = TfidfVectorizer(
+    max_features=15000,
+    ngram_range=(1, 2),
+    stop_words=None,   # <- allow all words including 'o'
+    min_df=1,          # <- include rare words
+    sublinear_tf=True
+)
+
+
+X = vectorizer.fit_transform(df_balanced["clean_text"])
+y = df_balanced["sentiment"]
+
+# -------------------------------
+# 6. Train/Test split
 # -------------------------------
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.2, stratify=y, random_state=42
 )
 
 # -------------------------------
-# Train models
+# 7. Train models
 # -------------------------------
+lr = LogisticRegression(max_iter=3000, class_weight="balanced", C=2.0)
+nb = MultinomialNB()
+svm = LinearSVC(class_weight="balanced", C=1.5, max_iter=5000)
 
-# Logistic Regression (multiclass compatible)
-lr = LogisticRegression(
-    max_iter=200,
-    solver="lbfgs",      # works for multiclass
-    class_weight="balanced"
-)
+print("Training Logistic Regression...")
 lr.fit(X_train, y_train)
 
-# Naive Bayes
-nb = MultinomialNB()
+print("Training Naive Bayes...")
 nb.fit(X_train, y_train)
 
-# Linear SVM
-svm = LinearSVC(class_weight="balanced", max_iter=2000)
+print("Training Linear SVM...")
 svm.fit(X_train, y_train)
 
 # -------------------------------
-# Evaluate models
+# 8. Evaluate
 # -------------------------------
-print("Logistic Regression Accuracy:", accuracy_score(y_test, lr.predict(X_test)))
-print("Naive Bayes Accuracy:", accuracy_score(y_test, nb.predict(X_test)))
-print("Linear SVM Accuracy:", accuracy_score(y_test, svm.predict(X_test)))
+print("\nModel evaluation on test set:")
+print("LR Accuracy:", accuracy_score(y_test, lr.predict(X_test)))
+print("NB Accuracy:", accuracy_score(y_test, nb.predict(X_test)))
+print("SVM Accuracy:", accuracy_score(y_test, svm.predict(X_test)))
 
 # -------------------------------
-# Save models
+# 9. Save models & vectorizer
 # -------------------------------
 os.makedirs("submit_dashboard/models", exist_ok=True)
-joblib.dump(lr, "submit_dashboard/models/model_lr_initial.pkl")
-joblib.dump(nb, "submit_dashboard/models/model_nb_initial.pkl")
-joblib.dump(svm, "submit_dashboard/models/model_svm_initial.pkl")
 
-print("All models saved successfully.")
+joblib.dump(vectorizer, "submit_dashboard/models/tfidf_vectorizer.pkl")
+joblib.dump(lr, "submit_dashboard/models/model_lr_final.pkl")
+joblib.dump(nb, "submit_dashboard/models/model_nb_final.pkl")
+joblib.dump(svm, "submit_dashboard/models/model_svm_final.pkl")
+
+print("\n Models and vectorizer saved successfully!")

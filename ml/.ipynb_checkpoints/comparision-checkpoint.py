@@ -49,9 +49,9 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 # -------------------------------
 # 5. Load trained models
 # -------------------------------
-lr = joblib.load("submit_dashboard/models/model_lr_initial.pkl")
-nb = joblib.load("submit_dashboard/models/model_nb_initial.pkl")
-svm = joblib.load("submit_dashboard/models/model_svm_initial.pkl")
+lr = joblib.load("submit_dashboard/models/model_lr_final.pkl")
+nb = joblib.load("submit_dashboard/models/model_nb_final.pkl")
+svm = joblib.load("submit_dashboard/models/model_svm_final.pkl")
 
 models = {
     "Logistic Regression": lr,
