@@ -7,7 +7,7 @@ import streamlit as st
 import joblib
 
 # -------------------------------
-# Page configuration (MUST be first)
+# Page configuration
 # -------------------------------
 st.set_page_config(
     page_title="Social Media Sentiment",
