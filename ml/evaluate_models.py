@@ -39,7 +39,17 @@ if 'sentiment' not in df.columns or df['sentiment'].isnull().all():
     df['sentiment'] = df['clean_text'].apply(get_sentiment)
 
 # -------------------------------
-# 4. Balance dataset exactly like training
+# 4. Map string sentiment to numbers if needed
+# -------------------------------
+if df['sentiment'].dtype == 'object':
+    label_map = {"Negative": -1, "Neutral": 0, "Positive": 1}
+    df['sentiment'] = df['sentiment'].map(label_map)
+
+# Verify counts
+print("Dataset sentiment distribution:\n", df['sentiment'].value_counts())
+
+# -------------------------------
+# 5. Balance dataset for evaluation
 # -------------------------------
 count_neg = len(df[df.sentiment == -1])
 count_neu = len(df[df.sentiment == 0])
@@ -51,10 +61,10 @@ df_neu = df[df.sentiment == 0].sample(min_count, random_state=42)
 df_pos = df[df.sentiment == 1].sample(min_count, random_state=42)
 
 df_balanced = pd.concat([df_neg, df_neu, df_pos]).sample(frac=1, random_state=42)
-print("Balanced distribution for evaluation:\n", df_balanced['sentiment'].value_counts())
+print("\nBalanced distribution for evaluation:\n", df_balanced['sentiment'].value_counts())
 
 # -------------------------------
-# 5. Load TF-IDF vectorizer
+# 6. Load TF-IDF vectorizer
 # -------------------------------
 vectorizer_path = "submit_dashboard/models/tfidf_vectorizer.pkl"
 if not os.path.exists(vectorizer_path):
@@ -65,7 +75,7 @@ X = vectorizer.transform(df_balanced["clean_text"])
 y = df_balanced["sentiment"]
 
 # -------------------------------
-# 6. Train/Test split
+# 7. Train/Test split
 # -------------------------------
 from sklearn.model_selection import train_test_split
 X_train, X_test, y_train, y_test = train_test_split(
@@ -73,7 +83,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # -------------------------------
-# 7. Load trained models
+# 8. Load trained models
 # -------------------------------
 models = {
     "Logistic Regression": joblib.load("submit_dashboard/models/model_lr_final.pkl"),
@@ -82,7 +92,7 @@ models = {
 }
 
 # -------------------------------
-# 8. Evaluate models
+# 9. Evaluate models
 # -------------------------------
 labels = [-1, 0, 1]
 label_names = ["Negative", "Neutral", "Positive"]

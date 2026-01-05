@@ -1,83 +1,61 @@
-import pandas as pd
+# ml_feature_pipeline_spark_vectorized.py
 from spark_session import spark
-import re
-import nltk
-from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
+from pyspark.sql.functions import col, pandas_udf
+from pyspark.sql.types import StringType
+import pandas as pd
 import joblib
-import os
-from textblob import TextBlob
 
 # -------------------------------
-# Download stopwords (safe check)
+# 1. Load dataset from HDFS
 # -------------------------------
-try:
-    stop_words = set(stopwords.words('english'))
-except LookupError:
-    nltk.download('stopwords')
-    stop_words = set(stopwords.words('english'))
+hdfs_input_path = "hdfs://localhost:9000/processed/final_dataset"
+df_spark = spark.read.parquet(hdfs_input_path)
+print("Loaded dataset from HDFS:", df_spark.count(), "rows")
 
 # -------------------------------
-# Step 2a: Load dataset
+# 2. Clean text (simple lowercase + trim)
 # -------------------------------
-hdfs_path = "hdfs://localhost:9000/processed/final_dataset"
-df_spark = spark.read.parquet(hdfs_path)
+from pyspark.sql.functions import lower, regexp_replace, trim
 
-# Use sample to avoid memory issues (remove limit for full run)
-df = df_spark.limit(1000).toPandas()
-
-print("Dataset loaded. Preview:")
-print(df.head())
-
-# -------------------------------
-# Step 2b: Clean text
-# -------------------------------
-def clean_text_fn(text):
-    text = str(text).lower()
-    text = re.sub(r'[^a-z\s]', '', text)
-    text = ' '.join(w for w in text.split() if w not in stop_words)
-    return text.strip()
-
-# IMPORTANT: reuse existing clean_text column safely
-df['clean_text'] = df['clean_text'].fillna('').apply(clean_text_fn)
-
-print("Text cleaned. Preview:")
-print(df[['clean_text']].head())
-
-# -------------------------------
-# Step 2c: TF-IDF feature extraction
-# -------------------------------
-vectorizer = TfidfVectorizer(
-    max_features=5000,
-    min_df=2
+df_spark = df_spark.withColumn(
+    "clean_text",
+    trim(lower(regexp_replace(col("clean_text"), r'[^a-z\s]', "")))
 )
 
-X = vectorizer.fit_transform(df['clean_text'])
+# -------------------------------
+# 3. Load vectorizer + model
+# -------------------------------
+VECTORIZER_PATH = "submit_dashboard/models/tfidf_vectorizer.pkl"
+MODEL_PATH = "submit_dashboard/models/model_svm_final.pkl"
 
-print("TF-IDF features created. Shape:", X.shape)
+vectorizer = joblib.load(VECTORIZER_PATH)
+model = joblib.load(MODEL_PATH)
+INT_TO_LABEL = {-1: "Negative", 0: "Neutral", 1: "Positive"}
 
 # -------------------------------
-# Step 2d: Sentiment labeling
+# 4. Vectorized Pandas UDF for prediction
 # -------------------------------
-def sentiment_label(text):
-    polarity = TextBlob(text).sentiment.polarity
-    if polarity > 0:
-        return 1
-    elif polarity < 0:
-        return -1
-    else:
-        return 0
-
-df['sentiment'] = df['clean_text'].apply(sentiment_label)
-y = df['sentiment']
-
-print("Sentiment labels created. Preview:")
-print(df[['clean_text', 'sentiment']].head())
+@pandas_udf(StringType())
+def predict_sentiment_vectorized(text_series: pd.Series) -> pd.Series:
+    X = vectorizer.transform(text_series)
+    preds = model.predict(X)
+    return pd.Series([INT_TO_LABEL[p] for p in preds])
 
 # -------------------------------
-# Step 2e: Save TF-IDF vectorizer
+# 5. Apply vectorized UDF
 # -------------------------------
-os.makedirs('submit_dashboard/models', exist_ok=True)
-joblib.dump(vectorizer, 'submit_dashboard/models/tfidf_vectorizer.pkl')
+df_spark_pred = df_spark.withColumn("sentiment", predict_sentiment_vectorized(col("clean_text")))
 
-print("TF-IDF vectorizer saved successfully!")
+# -------------------------------
+# 6. Save results to HDFS
+# -------------------------------
+output_path = "hdfs://localhost:9000/processed/final_dataset_ml"
+df_spark_pred.write.mode("overwrite").parquet(output_path)
+print(f"ML-processed dataset saved to HDFS: {output_path}")
+
+# -------------------------------
+# 7. Optional: Summary
+# -------------------------------
+summary = df_spark_pred.groupBy("sentiment").count().toPandas()
+summary["Percentage"] = (summary["count"] / summary["count"].sum() * 100).round(2)
+print("\nSentiment Summary:\n", summary)

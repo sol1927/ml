@@ -1,4 +1,3 @@
-# Negative
     "Absolutely terrible and disappointing",
     "I hate this product",
     "This is the worst experience I have ever had",
@@ -7,29 +6,17 @@
     "Terrible quality and service",
     "Not worth the money",
     "Extremely poor customer support",
-    "It broke the first day I used it",
     "I am very unhappy with this purchase",
     
-# Positive
     "Best purchase I have ever made",
     "I am extremely happy with this",
     "I love this! Highly recommended",
-    "Exceeded my expectations in every way",
     "Amazing product, I’m very satisfied",
     "Fantastic quality and great service",
     "This is absolutely perfect",
     "I will buy this again for sure",
-    "Superb experience, five stars",
     "Everything worked exactly as described",
     
-# Neutral
-    "The product is okay, nothing special",
     "It works as described",
-    "Average experience, neither good nor bad",
-    "Delivery was on time, product is fine",
-    "I have no strong feelings about this",
     "It’s acceptable for the price",
     "Product meets basic expectations",
-    "Nothing unusual or noteworthy",
-    "Neither satisfied nor dissatisfied",
-    "Standard quality, nothing more"
