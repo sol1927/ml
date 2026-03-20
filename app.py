@@ -1,6 +1,5 @@
 # =========================================
 # SENTIMENT ANALYSIS – STREAMLIT UI
-# Big Data Group Assignment – Group F
 # =========================================
 
 import streamlit as st
@@ -16,13 +15,17 @@ st.set_page_config(
 )
 
 # -------------------------------
-# Load vectorizer & model
+# Load vectorizer & model with caching
 # -------------------------------
 VECTORIZER_PATH = "submit_dashboard/models/tfidf_vectorizer.pkl"
 MODEL_PATH = "submit_dashboard/models/model_svm_final.pkl"
 
-vectorizer = joblib.load(VECTORIZER_PATH)
-model = joblib.load(MODEL_PATH)
+@st.cache_resource
+def load_model(path):
+    return joblib.load(path)
+
+vectorizer = load_model(VECTORIZER_PATH)
+model = load_model(MODEL_PATH)
 
 # -------------------------------
 # Sentiment label mapping
@@ -38,11 +41,8 @@ INT_TO_LABEL = {
 # -------------------------------
 st.markdown(
     """
-    <h4 style='text-align: center; color: gray;'>
-        Big Data Group Assignment
-    </h4>
     <h1 style='text-align: center;'>
-        Social Media Sentiment
+        Social Media Sentiment Analysis
     </h1>
     <p style='text-align: center; font-size: 18px;'>
         Enter text below and click the button to predict sentiment
@@ -65,34 +65,38 @@ user_text = st.text_area(
 # -------------------------------
 # Predict button
 # -------------------------------
-if st.button("Click here"):
+if st.button("Predict Sentiment"):
 
     if user_text.strip() == "":
         st.warning("⚠️ Please enter some text.")
     else:
-        # Vectorize input
-        X = vectorizer.transform([user_text])
+        try:
+            # Vectorize input
+            X = vectorizer.transform([user_text])
 
-        # Predict sentiment
-        prediction = model.predict(X)[0]
-        label = INT_TO_LABEL[prediction]
+            # Predict sentiment
+            prediction = model.predict(X)[0]
+            label = INT_TO_LABEL.get(prediction, "Unknown")
 
-        # Display result
-        st.write("---")
-        st.subheader("📊 Prediction Result")
+            # Display result
+            st.write("---")
+            st.subheader("📊 Prediction Result")
 
-        if prediction == 1:
-            st.success(label)
-        elif prediction == -1:
-            st.error(label)
-        else:
-            st.info(label)
+            if prediction == 1:
+                st.success(label)
+            elif prediction == -1:
+                st.error(label)
+            else:
+                st.info(label)
+
+        except Exception as e:
+            st.error(f"Error predicting sentiment: {e}")
 
 # -------------------------------
 # Footer
 # -------------------------------
 st.write("---")
 st.markdown(
-    "<h5 style='text-align: center;'>Group F • Big Data Analytics Project</h5>",
+    "<p style='text-align:center; font-size:14px;'>© 2026 Social Media Sentiment Project</p>",
     unsafe_allow_html=True
 )
