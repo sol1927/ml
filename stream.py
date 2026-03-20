@@ -1,6 +1,5 @@
 # =========================================
 # SENTIMENT ANALYSIS – STREAMLIT UI
-# Big Data Group Assignment – Group F
 # =========================================
 
 import streamlit as st
@@ -58,7 +57,7 @@ def clean_text(text):
     return ' '.join(text.split())
 
 # -------------------------------
-# Prediction
+# Batch prediction
 # -------------------------------
 def predict_batch(texts, model):
     X = vectorizer.transform([clean_text(t) for t in texts])
@@ -77,7 +76,7 @@ st.markdown(
     """
     <h2 style='text-align:center;'>💬 Social Media Sentiment Analysis</h2>
     <p style='text-align:center;color:gray;'>
-    Big Data Analytics Group Assignment – Group F
+    Analyze your social media text or comments
     </p>
     """,
     unsafe_allow_html=True
@@ -202,6 +201,6 @@ with right:
 # ===============================
 st.write("---")
 st.markdown(
-    "<p style='text-align:center;color:gray;'>Group F • Big Data Analytics Project</p>",
+    "<p style='text-align:center;color:gray;'>© 2026 Social Media Sentiment Project</p>",
     unsafe_allow_html=True
 )
